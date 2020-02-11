@@ -1,0 +1,20 @@
+
+<launch>
+
+  <arg name="frame_names" default="[link_3_tip, link_7_tip, link_11_tip, link_15_tip]"/>
+  <arg name="invert" default="false"/>
+  <arg name="zero" default="true" />
+
+  <node name="optoforce_publisher_node"
+        type="optoforce_publisher_node"
+        pkg="optoforce_publisher"
+        output="screen" >
+
+    <param name="invert_optoforce" type="bool" value="$(arg invert)" />
+    <param name="zero_optoforce" type="bool" value="$(arg zero)" />
+    <param name="frame_names" value="$(arg frame_names)"/>
+
+  </node>
+
+
+</launch>

@@ -1,0 +1,27 @@
+
+<launch>
+  <!-- Load the test xacro description -->
+  <param name="robot_description"
+         command="$(find xacro)/xacro '$(find optoforce_publisher)/model/optoforce-test.xacro' --check-order"/>
+
+  <!-- include optoforce publisher launch -->
+  <include file="$(find optoforce_publisher)/launch/optoforce_publisher.launch" />
+
+  <node name="joint_states" pkg="joint_state_publisher" type="joint_state_publisher">
+    <remap from="joint_states" to="optoforce/joint_states"/>
+  </node>
+
+  <!-- Joint States (angles) to Joint Transforms -->
+  <node name="jointState2tf"
+    pkg="robot_state_publisher"
+    type="robot_state_publisher">
+  <remap from="joint_states" to="optoforce/joint_states"/>
+  </node>
+
+  <node name="rviz_optoforce_test"
+        pkg="rviz" type="rviz"
+        args="-d $(find optoforce_publisher)/model/optoforce-test.rviz"
+        output="screen">
+  </node>
+
+</launch>

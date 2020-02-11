@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="optoforce-test">
+
+<!-- include single sensor -->
+<xacro:include filename="$(find optoforce_publisher)/model/optoforce-omd.xacro" />
+
+<xacro:macro name="sensor_joint"
+        params="sensor_no">
+
+  <joint name="root_to_sensor_${sensor_no}" type="fixed">
+    <parent link="test_root"/>
+    <child link="allegro_omd_adapter_${sensor_no}"/>
+    <origin xyz="${-0.15+0.10*sensor_no} 0 0.05" rpy="0 0 0"/>
+  </joint>
+
+</xacro:macro>
+
+<xacro:sensor
+  sensor_no="0"
+  link_name="sensor_0"
+  />
+<xacro:sensor
+  sensor_no="1"
+  link_name="sensor_1"
+  />
+<xacro:sensor
+  sensor_no="2"
+  link_name="sensor_2"
+  />
+<xacro:sensor
+  sensor_no="3"
+  link_name="sensor_3"
+  />
+
+<link name="test_root">
+  <origin xyz="0 0 0"/>
+</link>
+
+<xacro:sensor_joint
+  sensor_no="0"
+  />
+<xacro:sensor_joint
+  sensor_no="1"
+  />
+<xacro:sensor_joint
+  sensor_no="2"
+  />
+<xacro:sensor_joint
+  sensor_no="3"
+  />
+
+
+</robot>

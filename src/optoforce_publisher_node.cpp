@@ -11,19 +11,21 @@
 #include <optoforce_api/OptoDAQWatcher.h>
 
 #include <geometry_msgs/WrenchStamped.h>
+#include <geometry_msgs/Vector3.h>
 
 #include <tf2_ros/transform_listener.h>
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <tf2/LinearMath/Transform.h>
-#include <tf2/LinearMath/Vector3.h>
+
 
 using namespace std;
 
 OptoDAQ* daqs_;
 // count of DAQs
-std::size_t count_;
+std::size_t daq_count_;
+int sensor_count_;
 // frequency of packets (Hz)
 double pack_freq_ = 1000.0;
 
@@ -35,10 +37,10 @@ vector<string> frame_names_;
 
 // zeroing
 bool zero_;
-vector<tf2::Vector3> zero_vec_;
+vector<geometry_msgs::Vector3> zero_vec_;
 
 void timerCallback(const ros::TimerEvent&);
-void publishForce(const size_t sensor_no, const tf2::Vector3 &force_vec);
+void publishForce(const size_t sensor_no, const geometry_msgs::Vector3 &force_vec);
 bool getParams(ros::NodeHandle nh);
 void sigintCallback(int sig);
 
@@ -50,6 +52,9 @@ int main(int argc, char **argv){
 
   ros::NodeHandle nh;
 
+  // attempt to get ros parameters
+  if(!getParams(nh)) return -1;
+
   // Create an OptoDAQWatcher instance that can enumerate connected DAQs via USB
   OptoDAQWatcher watcher;
 	watcher.Start();  // Start the watcher on a different thread
@@ -57,14 +62,14 @@ int main(int argc, char **argv){
 	OptoDAQDescriptor descriptors[16];
 
   // Trying to get connected DAQs (max.: 16, it can be changed up to 64)
-  count_ = watcher.GetConnectedDAQs(descriptors, 16, true);
-  while (count_ == 0) {
-    count_ = watcher.GetConnectedDAQs(descriptors, 16, true);
+  daq_count_ = watcher.GetConnectedDAQs(descriptors, 16, true);
+  while (daq_count_ == 0) {
+    daq_count_ = watcher.GetConnectedDAQs(descriptors, 16, true);
   }
 
   std::string info_str = "";
   // Show information about connected DAQs
-	for (std::size_t i = 0; i < count_; ++i) {
+	for (std::size_t i = 0; i < daq_count_; ++i) {
 		info_str += "Information about Connected DAQ (" + to_string(i + 1) + "):\n";
 		info_str += "Connected on port: " + string(descriptors[i].GetAddress()) + "\n";
 		info_str += "Protocol version: " + to_string(descriptors[i].GetProtocolVersion()) + "\n";
@@ -76,15 +81,15 @@ int main(int argc, char **argv){
 	}
 
   // Open all the connected DAQs
-	daqs_ = new OptoDAQ[count_];
-	for (std::size_t i = 0; i < count_; ++i) {
+	daqs_ = new OptoDAQ[daq_count_];
+	for (std::size_t i = 0; i < daq_count_; ++i) {
 		daqs_[i].SetOptoDAQDescriptor(descriptors[i]);
 		bool success = daqs_[i].Open();
 		if (success == false) {
 			ROS_ERROR("%d. DAQ could not be opened!", (int)i+1);
 			continue;
 		}
-		OptoConfig config = OptoConfig(pack_freq_, 4, 0);
+		OptoConfig config = OptoConfig(pack_freq_, sensor_count_, 0);
 		success = daqs_[i].SendConfig(config); // Set up the speed to 100 Hz and filtering to 15 Hz
 		if (success) {
 			ROS_INFO("%d. DAQ successfully configured.", (int)i+1);
@@ -96,14 +101,11 @@ int main(int argc, char **argv){
 		daqs_[i].RequestSensitivityReport(); // This call is a must
 	}
 
-  // attempt to get ros parameters
-  if(!getParams(nh)) return -1;
-
   // ros shutdown handler
   signal(SIGINT, sigintCallback);
 
   // create wrench publisher to visualize in rviz
-  for (int si=0; si<4; si++){
+  for (int si=0; si<sensor_count_; si++){
     wrench_publisher_vec_.push_back(
       nh.advertise<geometry_msgs::WrenchStamped>("optoforce_wrench_"+to_string(si), 3));
   }
@@ -132,18 +134,19 @@ bool getParams(ros::NodeHandle nh){
     return false;
   }
 
-  // get zero parameter
-  if(!ros::param::get("~zero_optoforce", zero_) ){
-    ROS_ERROR("Optoforce publisher: Can't find zero_optoforce param.");
-    return false;
-  }
-  zero_vec_.resize(4, tf2::Vector3());
-
   // get frame name params
   if(!ros::param::get("~frame_names", frame_names_) ){
     ROS_ERROR("Optoforce publisher: Can't find frame_names param.");
     return false;
   }
+  sensor_count_ = frame_names_.size();
+
+  // get zero parameter
+  if(!ros::param::get("~zero_optoforce", zero_) ){
+    ROS_ERROR("Optoforce publisher: Can't find zero_optoforce param.");
+    return false;
+  }
+  zero_vec_.resize(sensor_count_, geometry_msgs::Vector3());
 
   return true;
 
@@ -153,7 +156,7 @@ bool getParams(ros::NodeHandle nh){
 void timerCallback(const ros::TimerEvent&){
 
   // Get a packet from every opened DAQs
-	for (std::size_t i = 0; i < count_; ++i) {
+	for (std::size_t i = 0; i < daq_count_; ++i) {
     OptoPacket3D packet;
 
 		if (daqs_[i].IsValid()) {
@@ -173,16 +176,16 @@ void timerCallback(const ros::TimerEvent&){
 		// Show the captured packet's F values
 		std::size_t size = packet.GetSize(); // It should be the number of sensors.
 		for (std::size_t j = 0; j < size; ++j) {
-      tf2::Vector3 f_vec;
-      f_vec.setX(packet.GetFxInCounts(j) * scaler * inverter - zero_vec_[j].getX());
-      f_vec.setY(packet.GetFyInCounts(j) * scaler * inverter - zero_vec_[j].getY());
-      f_vec.setZ(packet.GetFzInCounts(j) * scaler * inverter - zero_vec_[j].getZ());
+      geometry_msgs::Vector3 f_vec;
+      f_vec.x = packet.GetFxInCounts(j) * scaler * inverter - zero_vec_[j].x;
+      f_vec.y = packet.GetFyInCounts(j) * scaler * inverter - zero_vec_[j].y;
+      f_vec.z = packet.GetFzInCounts(j) * scaler * inverter - zero_vec_[j].z;
 
       unsigned short pid = packet.GetPacketCounter();
       unsigned short status = packet.GetStatus();
 
 			ROS_DEBUG("Optoforce publisher: Sensor %d Sample %d \nForce (%f, %f, %f) Status %d",
-                  (int)j, pid, f_vec.getX(), f_vec.getY(), f_vec.getZ(), status);
+                  (int)j, pid, f_vec.x, f_vec.y, f_vec.z, status);
 
       publishForce(j, f_vec);
 
@@ -195,7 +198,7 @@ void timerCallback(const ros::TimerEvent&){
 	}
 }
 
-void publishForce(const size_t sensor_no, const tf2::Vector3 &force_vec){
+void publishForce(const size_t sensor_no, const geometry_msgs::Vector3 &force_vec){
 
   // create wrench message and publish
   geometry_msgs::WrenchStamped msg;
@@ -203,9 +206,7 @@ void publishForce(const size_t sensor_no, const tf2::Vector3 &force_vec){
   msg.header.stamp = ros::Time::now();
   msg.header.frame_id = frame_names_[sensor_no];
 
-  msg.wrench.force.x = force_vec.getX();
-  msg.wrench.force.y = force_vec.getY();
-  msg.wrench.force.z = force_vec.getZ();
+  msg.wrench.force= force_vec;
 
   msg.wrench.torque.x = 0.0;
   msg.wrench.torque.y = 0.0;
@@ -219,8 +220,8 @@ void publishForce(const size_t sensor_no, const tf2::Vector3 &force_vec){
 void sigintCallback(int sig)
 {
   // send and empty wrench message
-  for(int si=0; si<4; si++)
-    publishForce(si, tf2::Vector3());
+  for(int si=0; si<sensor_count_; si++)
+    publishForce(si, geometry_msgs::Vector3());
 
   // spin once to hand communication
   ros::spinOnce();

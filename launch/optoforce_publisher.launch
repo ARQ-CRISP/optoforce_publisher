@@ -12,7 +12,7 @@
 
     <param name="invert_optoforce" type="bool" value="$(arg invert)" />
     <param name="zero_optoforce" type="bool" value="$(arg zero)" />
-    <param name="frame_names" value="$(arg frame_names)"/>
+    <rosparam param="frame_names" subst_value="True">$(arg frame_names)</rosparam>
 
   </node>
 

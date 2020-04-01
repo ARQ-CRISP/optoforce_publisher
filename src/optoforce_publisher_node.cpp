@@ -29,6 +29,8 @@ int sensor_count_;
 // frequency of packets (Hz)
 double pack_freq_ = 1000.0;
 
+double extreme_value_ = 500.0;
+
 vector<ros::Publisher> wrench_publisher_vec_; // to visualize in rviz
 tf2_ros::Buffer tf_buffer_;
 // external params
@@ -41,6 +43,7 @@ vector<geometry_msgs::Vector3> zero_vec_;
 
 void timerCallback(const ros::TimerEvent&);
 void publishForce(const size_t sensor_no, const geometry_msgs::Vector3 &force_vec);
+bool skipExtremeValues(const geometry_msgs::Vector3& f_vec);
 bool getParams(ros::NodeHandle nh);
 void sigintCallback(int sig);
 
@@ -184,6 +187,11 @@ void timerCallback(const ros::TimerEvent&){
       unsigned short pid = packet.GetPacketCounter();
       unsigned short status = packet.GetStatus();
 
+      if(skipExtremeValues(f_vec)) {
+        ROS_WARN("Optoforce publisher: extreme value at sensor %d", (int)j);
+        continue;
+      }
+
 			ROS_DEBUG("Optoforce publisher: Sensor %d Sample %d \nForce (%f, %f, %f) Status %d",
                   (int)j, pid, f_vec.x, f_vec.y, f_vec.z, status);
 
@@ -214,6 +222,15 @@ void publishForce(const size_t sensor_no, const geometry_msgs::Vector3 &force_ve
 
   wrench_publisher_vec_[sensor_no].publish(msg);
 
+}
+
+bool skipExtremeValues(const geometry_msgs::Vector3& f_vec){
+
+  double total_value = abs(f_vec.x) +
+                       abs(f_vec.y) +
+                       abs(f_vec.z);
+
+  return (total_value > extreme_value_);
 }
 
 // This procedure is called when the ros node is interrupted

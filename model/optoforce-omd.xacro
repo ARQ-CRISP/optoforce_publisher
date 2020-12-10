@@ -69,7 +69,7 @@
   <joint name="adapter_sensor_${sensor_no}" type="fixed">
     <parent link="allegro_omd_adapter_${sensor_no}"/>
     <child link="omd_${sensor_no}"/>
-    <origin xyz="0.00265 0 0.0083" rpy="0 -0.79 0"/>
+    <origin xyz="0.00410 0 0.008358" rpy="0 -0.79 0"/>
   </joint>
 
   <!-- sensor link -->
